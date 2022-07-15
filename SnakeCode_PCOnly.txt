@@ -1,0 +1,130 @@
+Dim SnakeArrayRow() As Integer, SnakeArrayColumn() As Integer, AppleRow As Integer, AppleColumn As Integer, Direction As String, GrowthSpurt As Boolean, Defeat As Boolean
+'A more complex version of a snake game. It functions much the same, but it uses a Windows API function (essentially the native functions).
+'Essentially, the function gets the value of a pressed key on the keyboard.
+'It's a Windows function, so this game doesn't work on Mac.
+'So the code keeps going inside the main game loop, runs two procedures to move the snake, check collision, and display everything.
+'The previous, slower version just cleared everything then redrew everything, which made the snake flicker at these higher speeds.
+'So instead, we delete the last element of the snake just before we erase its coordinates, and we draw the snake's head once it is created.
+'Then, it uses the Timer function to get a timer in milliseconds.
+'Inside that loop (which only ends when 100ms have elapsed), the GetAsyncKeyState function tells our code whether the arrow keys are pressed.
+'I think this is more intuitive than the Mac version: "wait for input for 0.1s, then do things".
+
+'https://wellsr.com/vba/2017/excel/GetAsyncKeyState-vba-to-wait-until-a-key-is-pressed/
+Private Declare PtrSafe Function GetAsyncKeyState Lib "user32" (ByVal vKey As Long) As Integer
+
+Private Sub Snake()
+    While Defeat = False
+        Call ShiftSnake
+        Call CheckCollision
+        'Runs ShiftSnake to move the array values, CheckCollision to check whether the snake bumped into an apple/itself/the borders, and DisplayStuff to display the snake and apples.
+        start = Timer
+        While (Timer < start + 0.1)
+            If GetAsyncKeyState(&H25) And Direction <> "Right" Then Direction = "Left"
+            If GetAsyncKeyState(&H26) And Direction <> "Down" Then Direction = "Up"
+            If GetAsyncKeyState(&H27) And Direction <> "Left" Then Direction = "Right"
+            If GetAsyncKeyState(&H28) And Direction <> "Up" Then Direction = "Down"
+            DoEvents
+        Wend
+    Wend
+    'Application.OnTime doesn't accept intervals under a second. Anything >500ms is treated as one second, anything under is treated as 0 second.
+    'Application.Wait has the exact same issue.
+End Sub
+
+Sub SnakeInit()
+    'Starts the game.
+    Defeat = False
+    Dim Cell As Range
+    For Each Cell In [A1:U1]
+        Cell.EntireColumn.ColumnWidth = 2
+    Next Cell
+    For Each Cell In [A1:A21]
+        Cell.EntireRow.RowHeight = 14
+    Next Cell
+    [A1:A21].Interior.Color = vbBlack
+    [U1:U21].Interior.Color = vbBlack
+    [B1:T1].Interior.Color = vbBlack
+    [B21:T21].Interior.Color = vbBlack
+    [B2:T20].Clear
+    'We make borders. Colors are functional, so we use black to check whether something is a border.
+    ReDim SnakeArrayRow(1 To 3)
+    ReDim SnakeArrayColumn(1 To 3)
+    'We start with a three tiles long snake.
+    SnakeArrayRow(1) = 3
+    SnakeArrayRow(2) = 3
+    SnakeArrayRow(3) = 3
+    'All three tiles are in row 3.
+    SnakeArrayColumn(1) = 2
+    SnakeArrayColumn(2) = 3
+    SnakeArrayColumn(3) = 4
+    'And they are in columns 2, 3, and 4.
+    [B3:D3].Interior.Color = vbGreen
+    Direction = "Right"
+    'The snake starts by moving to the right.
+    Do
+        AppleRow = WorksheetFunction.RandBetween(2, 20)
+        AppleColumn = WorksheetFunction.RandBetween(2, 20)
+    Loop While Cells(AppleRow, AppleColumn).Interior.Color <> 16777215
+    Cells(AppleRow, AppleColumn).Interior.Color = vbRed
+    'Generates the apple in an unoccupied position.
+    '16777215 is the number for the "no fill" background color.
+    Call Snake
+    'The initialisation is over, we run the main macro for the first time.
+End Sub
+
+Private Sub ShiftSnake()
+    'The cool part.
+    'This makes sure the snake moves properly and that we are properly keeping track of the position of everything.
+    'It shifts the Nth node of the snake down to the (N-1)th node, then creates new coordinates for the last node (the head) based on direction.
+    If GrowthSpurt = True Then
+    'This part happens when an apple was eaten. Instead of shifting anything, the snake instead grows larger.
+        ReDim Preserve SnakeArrayRow(1 To UBound(SnakeArrayRow) + 1)
+        ReDim Preserve SnakeArrayColumn(1 To UBound(SnakeArrayColumn) + 1)
+        GrowthSpurt = False
+    Else
+        Cells(SnakeArrayRow(LBound(SnakeArrayRow)), SnakeArrayColumn(LBound(SnakeArrayRow))).Clear
+        For ArrayCounter = LBound(SnakeArrayRow) To UBound(SnakeArrayRow) - 1
+        'For each element in the snake except the head, the coordinates of the element become the coordinates of the element "above".
+            SnakeArrayRow(ArrayCounter) = SnakeArrayRow(ArrayCounter + 1)
+            SnakeArrayColumn(ArrayCounter) = SnakeArrayColumn(ArrayCounter + 1)
+        Next ArrayCounter
+    End If
+    'If you set a watch on SnakeArrayRow and SnakeArrayColumn, at this point, you'll see the last element is the same as the second to last element.
+    'We set the coordinates of the last element based on direction (if going left, it's -1 column...).
+    
+    If Direction = "Left" Then
+        SnakeArrayRow(UBound(SnakeArrayRow)) = SnakeArrayRow(UBound(SnakeArrayRow) - 1)
+        SnakeArrayColumn(UBound(SnakeArrayRow)) = SnakeArrayColumn(UBound(SnakeArrayRow) - 1) - 1
+    End If
+    If Direction = "Right" Then
+        SnakeArrayRow(UBound(SnakeArrayRow)) = SnakeArrayRow(UBound(SnakeArrayRow) - 1)
+        SnakeArrayColumn(UBound(SnakeArrayRow)) = SnakeArrayColumn(UBound(SnakeArrayRow) - 1) + 1
+    End If
+    If Direction = "Down" Then
+        SnakeArrayRow(UBound(SnakeArrayRow)) = SnakeArrayRow(UBound(SnakeArrayRow) - 1) + 1
+        SnakeArrayColumn(UBound(SnakeArrayRow)) = SnakeArrayColumn(UBound(SnakeArrayRow) - 1)
+    End If
+    If Direction = "Up" Then
+        SnakeArrayRow(UBound(SnakeArrayRow)) = SnakeArrayRow(UBound(SnakeArrayRow) - 1) - 1
+        SnakeArrayColumn(UBound(SnakeArrayRow)) = SnakeArrayColumn(UBound(SnakeArrayRow) - 1)
+    End If
+End Sub
+
+Private Sub CheckCollision()
+    CollisionCellColor = Cells(SnakeArrayRow(UBound(SnakeArrayRow)), SnakeArrayColumn(UBound(SnakeArrayColumn))).Interior.Color
+    If CollisionCellColor = vbRed Then
+    'If the cell was red, we met the apple and must recreate one at a random unoccuped position.
+        GrowthSpurt = True
+        Do
+            AppleRow = WorksheetFunction.RandBetween(2, 20)
+            AppleColumn = WorksheetFunction.RandBetween(2, 20)
+        Loop While Cells(AppleRow, AppleColumn).Interior.Color <> 16777215
+        Cells(AppleRow, AppleColumn).Interior.Color = vbRed
+    End If
+    'If the cell was green or black, the snake bumped into itself/a wall and you lose.
+    'Defeat being true means the Snake() macro will not call itself again.
+    If CollisionCellColor = vbGreen Or CollisionCellColor = vbBlack Then Defeat = True: MsgBox ("You lose! Your score is: " & UBound(SnakeArrayRow))
+    Cells(SnakeArrayRow(UBound(SnakeArrayRow)), SnakeArrayColumn(UBound(SnakeArrayRow))).Interior.Color = vbGreen
+    'We only draw the "head" of the snake after we check collision because otherwise the game thinks the snake bumped its head into itself, which is dumb.
+End Sub
+
+
